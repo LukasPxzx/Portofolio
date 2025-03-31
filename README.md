@@ -1,6 +1,6 @@
-# Welcome to My Portfolio
+# My Portfolio
 
-## About This Portfolio
+## About 
 
 Welcome to my GitHub portfolio! This repository showcases a collection of my personal and academic projects in the field of Artificial Intelligence, specifically focusing on Deep Learning and Machine Learning. I created this portfolio to share my work, demonstrate my skills, and provide insight into my journey in AI research and application.
 
