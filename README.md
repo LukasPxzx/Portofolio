@@ -2,7 +2,7 @@
 
 ## About 
 
-Welcome to my GitHub portfolio! This repository showcases a collection of my personal and academic projects in the field of Artificial Intelligence, specifically focusing on Deep Learning and Machine Learning. I created this portfolio to share my work, demonstrate my skills, and provide insight into my journey in AI research and application.
+Welcome to my GitHub portfolio! This repository showcases a collection of my personal and academic projects on Deep Learning and Machine Learning and their applications to the real world. This portfolio's objective is to share my work, demonstrate my skills, and provide a view onto my journey in AI research and application.
 
 ## What You Will Find Here
 
@@ -14,7 +14,7 @@ In this portfolio, you will find:
 
 - **Application Types**: 
   - Some projects are simple applications that can be run on any standard computer.
-  - Others may require specific hardware (like GPUs) or software setups (like TensorFlow or PyTorch) to function properly.
+  - Others may require specific hardware (like RaspberryPi 2W, sensors, etc...) or software setups (like TensorFlow or PyTorch) to function properly.
 
 ## Technologies Used
 
@@ -26,7 +26,12 @@ Throughout my projects, I have worked with various programming languages and tec
 - Scikit-learn
 - NumPy
 - Pandas
-- [Other relevant technologies]
+- JavaScript
+- TensorFlow.js
+- Teachable Machine
+- CSS.js
+- SQLite3
+- Hashlib
 
 ## Getting Started
 
