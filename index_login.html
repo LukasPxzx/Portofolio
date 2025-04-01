@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Login with Model Prediction</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js" defer></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Georgia', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            text-align: center;
+            background-image: url('https://media.architecturaldigest.com/photos/571e97c5741fcddb16b559c9/16:9/w_2580,c_limit/modernist-decor-inspiration-01.jpg'); 
+            background-size: cover;
+            background-position: center;
+        }
+        .container {
+            background: rgba(0, 0, 0, 0.7); /* Darker background for better contrast */
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            width: 300px;
+        }
+        h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="password"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px 0; 
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #c9b89a; 
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s; /* Smooth transition */
+        }
+        button:hover {
+            background-color: #0056b3; 
+        }
+        #webcam-container {
+            display: none; /* Initially hidden */
+            margin-top: 20px;
+            justify-content: center;
+        }
+        #label-container {
+            display: flex;
+            justify-content: center;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        canvas {
+            width: 224px; /* Set to match model input size */
+            height: 224px; /* Set to match model input size */
+            border: 2px solid white; /* Border for visibility */
+        }
+    </style>
+</head>
+<body>  
+    <div class="container">
+        <h1>Login</h1>
+        <form id="loginForm">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Submit</button>
+        </form>
+        <div id="webcam-container"></div>
+        <div id="label-container"></div>
+    </div>
+
+    <script>
+        const URL = "./static/models/2-step-login/"; // Path to model
+        let model, webcam, labelContainer, maxPredictions;
+        let authenticatedUser = null; // Store the authenticated username
+        let consecutivePredictions = 0; // Counter for consecutive successful predictions
+        let accessGranted = false; // Flag to track access status
+    
+        // Load image model and setup the webcam
+        async function init() {
+            try {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+    
+                // Load model and metadata
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+    
+                // Setup webcam
+                const flip = true; // Flip the webcam
+                webcam = new tmImage.Webcam(224, 224, flip); // Set to 224x224 for model compatibility
+                await webcam.setup(); // Request access to the webcam
+                await webcam.play();
+                window.requestAnimationFrame(loop);
+    
+                // Append webcam canvas to DOM and show it
+                document.getElementById("webcam-container").appendChild(webcam.canvas);
+                document.getElementById("webcam-container").style.display = "flex"; // Show webcam
+                labelContainer = document.getElementById("label-container");
+                for (let i = 0; i < maxPredictions; i++) { // Append class labels
+                    labelContainer.appendChild(document.createElement("div"));
+                }
+                console.log("Webcam initialized and model loaded.");
+            } catch (error) {
+                console.error("Error initializing webcam or model:", error);
+            }
+        }
+    
+        async function loop() {
+            webcam.update(); // Update the webcam frame
+            await predict(); // Call predict function
+            window.requestAnimationFrame(loop); 
+        }
+    
+        // Run the webcam image through the model
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            let foundMatch = false; // Flag to check if a match is found
+    
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className;
+                const probability = prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = `${classPrediction}: ${probability}`;
+    
+                // Log all predictions for debugging
+                console.log(`Prediction: ${classPrediction}: ${probability}`);
+    
+                // Check if the predicted name matches the authenticated user
+                if (classPrediction === authenticatedUser && probability > 0.9) { // Ensure exact match and high confidence
+                    consecutivePredictions++; // Increment the counter for successful predictions
+                    foundMatch = true; // Set flag to true if a match is found
+    
+                    console.log(`Successful prediction for ${authenticatedUser}: ${consecutivePredictions}`);
+                    
+                    // Check if we have reached the threshold
+                    if (consecutivePredictions >= 10 && !accessGranted) {
+                        accessGranted = true; // Set access granted flag
+                        console.log("Access Granted");
+                        
+                        alert("Access Granted");
+    
+                        window.location.href = "/home"; // Redirect to the home URL
+                    }
+                } else if (classPrediction === authenticatedUser) {
+                    // If it was a prediction for the authenticated user but failed the confidence check
+                    console.log(`Failed prediction for ${authenticatedUser}: ${probability}`);
+                    consecutivePredictions = 0; // Reset counter if failed
+                } else {
+                    // If the prediction is for a different user, do not affect the counter
+                    console.log(`Ignored prediction for ${classPrediction}`);
+                }
+            }
+        }
+    
+        document.getElementById('loginForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); // Prevent form submission
+            const username = event.target.username.value;
+            const password = event.target.password.value;
+    
+            // Validate user credentials with the server
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    username: username,
+                    password: password
+                })
+            });
+    
+            if (response.ok) {
+                const userData = await response.json(); // Parse as JSON
+                authenticatedUser = userData.username; // Store the authenticated username
+                console.log("Login successful! Starting verification...");
+                init(); // Start the model and webcam after successful login
+            } else {
+                const errorMessage = await response.json(); // Get JSON error response
+                console.log(`Login failed: ${errorMessage.error}`);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction - Real Estate Project IoT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Georgia', serif; 
+            background-color: #f8f9fa; /* Light grey background */
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.7); /* Transparent dark background */
+        }
+        .navbar a {
+            color: white;
+            padding: 14px 16px;
+            text-decoration: none;
+            transition: background-color 0.3s; /* Smooth transition */
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .content {
+            padding: 40px;
+            text-align: center;
+        }
+        #prediction-chart {
+            max-width: 600px;
+            margin: 20px auto; 
+            background: white; /* White background for the chart */
+            padding: 20px;
+            border-radius: 10px; /* Rounded corners */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Shadow */
+        }
+        #propertyDetails {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background: white; /* White background */
+            border-radius: 10px; /* Rounded corners */
+            display: none; /* Initialize with no details */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Add shadow */
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: rgba(0, 0, 0, 0.1); /* Light background for header */
+        }
+        .btn-custom {
+            background-color: #c9b89a; 
+            color: white; /* Text color */
+            border: none; /* Remove border */
+            border-radius: 5px; 
+            padding: 10px 20px; 
+            transition: background-color 0.3s; /* Smooth transition */
+        }
+        .btn-custom:hover {
+            background-color: #c9b89a; /* Darker shade for hover effect */
+        }
+    </style>
+<script>
+    let model;
+    let predictionData = [];
+    let modelInputData = [];
+    let debugCounter = 1;
+    let lastRecordedDate;
+    let predictionChart; // Chart instance
+    let recordingInterval; // Interval for automatic recording
+    let recording = false; // State for recording
+    let predictionMade = false; // Flag to track if prediction has been made
+    let predictionsForNextDays = []; // Array for 50 day prediction
+    let properties = []; // Array to hold properties
+
+    function debugLog(message) {
+        console.log(`${debugCounter++}: ${message}`);
+    }
+
+    async function init() {
+        debugLog("Initializing model...");
+        await loadModel();
+        await fetchProperties();
+        debugLog("Model initialized.");
+        lastRecordedDate = new Date(); // Initialize to current date
+        setupInitialFakeData();
+    }
+
+    async function loadModel() {
+        debugLog("Starting to load model...");
+        try {
+            model = await tf.loadLayersModel('/static/models/MoldGrowthPrediction/tfjs_model/model.json');
+            debugLog("Model loaded successfully:", model);
+        } catch (error) {
+            console.error('Error loading model:', error);
+        }
+    }
+
+    async function fetchProperties() {
+        try {
+            const response = await fetch('/get_properties');
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const data = await response.json();
+            properties = data; 
+            populatePropertiesDropdown(); // Populate dropdown with fetched properties
+        } catch (error) {
+            console.error('Fetch properties error:', error);
+        }
+    }
+
+    function populatePropertiesDropdown() {
+        const propertyDropdown = document.getElementById('propertyDropdown');
+        propertyDropdown.innerHTML = ''; // Clear existing options
+
+        
+        if (properties.length === 0) {
+            const option = document.createElement('option');
+            option.textContent = 'No properties available';
+            propertyDropdown.appendChild(option);
+            return;
+        }
+
+        properties.forEach(property => {
+            const option = document.createElement('option');
+            option.value = property.id; 
+            option.textContent = `House: ${property.id}`; // Display in the format "House: {id}"
+            propertyDropdown.appendChild(option);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const propertyDropdown = document.getElementById('propertyDropdown');
+        const detailsDiv = document.getElementById('propertyDetails');
+        const detailsText = document.getElementById('detailsText');
+        const propertyImage = document.getElementById('propertyImage'); // Reference to the image element
+
+        propertyDropdown.addEventListener('change', (event) => {
+            const selectedId = parseInt(event.target.value);
+            if (selectedId) {
+                const selectedProperty = properties.find(prop => prop.id === selectedId);
+                if (selectedProperty) {
+                    // Update the details text
+                    detailsText.innerHTML = `
+                        <strong>Type ID:</strong> ${selectedProperty.property_type_id}<br>
+                        <strong>Price:</strong> $${selectedProperty.price}<br>
+                        <strong>Location ID:</strong> ${selectedProperty.location_id}<br>
+                        <strong>Mold Growth:</strong> ${selectedProperty.mold_growth !== null ? selectedProperty.mold_growth : 'N/A'}<br>
+                        <strong>Luminosity:</strong> ${selectedProperty.luminosity}<br>
+                        <strong>Humidity:</strong> ${selectedProperty.humidity}<br>
+                        <strong>Temperature:</strong> ${selectedProperty.temperature}
+                    `;
+                    // Update the image
+                    propertyImage.src = selectedProperty.image ? selectedProperty.image : 'https://via.placeholder.com/100';
+                    propertyImage.alt = 'Property Image';
+
+                    detailsDiv.style.display = 'block'; // Show the details
+                }
+            } else {
+                detailsDiv.style.display = 'none'; // Hide details if no property is selected
+            }
+        });
+    });
+
+    async function fetchSensorData() {
+        debugLog("Fetching sensor data...");
+        try {
+            const response = await fetch('/get_sensor_data');
+            if (!response.ok) {
+                debugLog("Network response was not ok: " + response.statusText);
+                return null;
+            }
+            const data = await response.json();
+            debugLog("Fetched Sensor Data:", data);
+            return data;
+        } catch (error) {
+            console.error("Error fetching sensor data:", error);
+            return null;
+        }
+    }
+
+    async function storeDataInDatabase(sensorData) {
+        debugLog("Storing data in Prediction_Data database...");
+        try {
+            const response = await fetch('/store_prediction_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(sensorData)
+            });
+            if (!response.ok) {
+                debugLog("Failed to store data: " + response.statusText);
+            } else {
+                debugLog("Data stored successfully.");
+            }
+        } catch (error) {
+            console.error("Error storing data:", error);
+        }
+    }
+
+    function setupInitialFakeData() {
+        debugLog("Setting up initial fake data...");
+        
+        // Create 10 fake timestamps with values starting at 0
+        for (let i = 0; i < 10; i++) {
+            const fakeData = {
+                RH2M: 0.0,  // Fake Relative Humidity
+                TS: 0.0,    // Fake Temperature
+                RCPType: 0   // RCP Type
+            };
+            modelInputData.push([fakeData.RH2M, fakeData.TS, fakeData.RCPType]);
+
+            // Increment the date for each fake entry
+            lastRecordedDate.setDate(lastRecordedDate.getDate() - 1); // Move back one day for each entry
+        }
+
+        debugLog("Initial fake data set up successfully:", modelInputData);
+    }
+
+    async function recordData() {
+        debugLog("Recording data...");
+
+        // Format the current date
+        const currentDate = lastRecordedDate.toISOString().split('T')[0];
+
+        try {
+            const sensorData = await fetchSensorData();
+            debugLog("Sensor Data Received:", sensorData);
+
+            // Check if sensorData has new values
+            if (sensorData && sensorData.Ts !== undefined && sensorData.RH2M !== undefined) {
+                debugLog("Fetched Values - Temperature:", sensorData.Ts, "Humidity:", sensorData.RH2M);
+
+                const selectedRcpType = parseInt(document.getElementById("rcpType").value);
+                const rcpFileMap = ['results_RCP2_6.csv', 'results_RCP4_5.csv', 'results_RCP8_5.csv'];
+
+                // Initialize mold_growth as undefined
+                let moldGrowthPrediction;
+
+                // Only make a prediction if the user has requested it
+                if (predictionMade) {
+                    moldGrowthPrediction = await makePrediction(); 
+                }
+
+                // Store new data
+                
+const predictionEntry = {
+    date: currentDate,
+    TS: sensorData.Ts,
+    RH2M: sensorData.RH2M,
+    mold_growth: moldGrowthPrediction,
+    luminosity: parseFloat(sensorData.luminosity),  
+    hcho: parseFloat(sensorData.hcho),               
+    RCPFile: rcpFileMap[selectedRcpType]
+};
+
+                // Store in predictionData for display
+                predictionData.push(predictionEntry);
+                modelInputData.push([
+                    parseFloat(sensorData.RH2M),
+                    parseFloat(sensorData.Ts),
+                    selectedRcpType
+                ]);
+
+                debugLog("Model Input Data After Push:", modelInputData);
+
+                if (modelInputData.length > 10) {
+                    modelInputData = modelInputData.slice(-10);
+                }
+
+                await storeDataInDatabase(predictionEntry);
+                displayData();
+
+                // Increment the last recorded date by one day
+                lastRecordedDate.setDate(lastRecordedDate.getDate() + 1);
+            } else {
+                debugLog("Invalid sensor data structure or no new data:", sensorData);
+            }
+        } catch (error) {
+            console.error("Error in recordData:", error);
+        }
+    }
+
+    function displayData() {
+    debugLog("Displaying data...");
+    const tbody = document.getElementById("data-body");
+    tbody.innerHTML = "";
+
+    predictionData.forEach((data, index) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${data.date}</td>
+            <td>${data.TS}</td>
+            <td>${data.RH2M}</td>
+            <td>${data.mold_growth !== undefined ? data.mold_growth : 'N/A'}</td>
+            <td>${data.luminosity !== undefined ? data.luminosity : 'N/A'}</td> <!-- Ensure luminosity is displayed -->
+            <td>${data.hcho !== undefined ? data.hcho : 'N/A'}</td>               <!-- Ensure hcho is displayed -->
+        `;
+        tbody.appendChild(row);
+    });
+    debugLog("Data displayed.");
+}
+
+    async function makePrediction() {
+        // Logic to make a prediction and return the value
+        const preparedData = prepareDataForPrediction();
+        if (preparedData) {
+            const inputTensor = tf.tensor3d(preparedData.flat(), [1, 10, 3]); // Shape: [1, 10, 3]
+            const prediction = model.predict(inputTensor);
+            const output = await prediction.array();
+
+           
+            const moldGrowthPrediction = output[0][0]; 
+            debugLog("Prediction output:", moldGrowthPrediction);
+            predictionMade = true; // Set flag indicating prediction has been made
+            return moldGrowthPrediction;
+        }
+        return undefined; 
+    }
+
+    function prepareDataForPrediction() {
+        debugLog("Preparing data for prediction...");
+        if (modelInputData.length < 10) {
+            alert("Not enough data points for prediction. Please record more.");
+            return null;
+        }
+
+        // Get the last 10 data points and ensure they are in the format [10, 3]
+        return modelInputData.slice(-10).map(data => [data[0], data[1], data[2]]);
+    }
+
+    async function toggleRecording() {
+        const recordingButton = document.getElementById("toggle-recording");
+        if (recording) {
+            // Stop recording
+            debugLog("Stopping data recording...");
+            clearInterval(recordingInterval);
+            recordingButton.classList.remove('btn-danger');
+            recordingButton.classList.add('btn-primary');
+            recordingButton.textContent = 'Start Recording';
+
+            // Call backend to stop recording
+            try {
+                const response = await fetch('/toggle_recording', { method: 'POST' });
+                if (!response.ok) {
+                    debugLog("Failed to stop recording: " + response.statusText);
+                }
+            } catch (error) {
+                console.error("Error stopping recording:", error);
+            }
+            recording = false;
+        } else {
+            // Start recording
+            debugLog("Starting data recording...");
+            recordingButton.classList.remove('btn-primary');
+            recordingButton.classList.add('btn-danger');
+            recordingButton.textContent = 'Stop Recording';
+
+            // Call backend to start recording            
+            try {
+                const response = await fetch('/toggle_recording', { method: 'POST' });
+                if (!response.ok) {
+                    debugLog("Failed to start recording: " + response.statusText);
+                }
+            } catch (error) {
+                console.error("Error starting recording:", error);
+            }
+            // Start automatic recording at regular intervals
+            recordingInterval = setInterval(recordData, 5000); 
+            recording = true;
+        }
+    }
+    async function updateLastPropertyData() {
+    const selectedId = parseInt(document.getElementById('propertyDropdown').value);
+
+    // Check if a property is selected
+    if (!selectedId) {
+        alert("Please select a property to update.");
+        return;
+    }
+
+    // Check if there are predictions available
+    if (predictionData.length === 0) {
+        alert("No prediction data available.");
+        return;
+    }
+
+    // Get the latest prediction values
+    const lastPrediction = predictionData[predictionData.length - 1];
+    console.log("Last Prediction:", lastPrediction); 
+
+    // Prepare the data to be sent in the request
+    const updatedData = {
+        id: selectedId,
+        mold_growth: lastPrediction.mold_growth !== undefined ? lastPrediction.mold_growth : null,
+        temperature: lastPrediction.TS !== undefined ? lastPrediction.TS : null,
+        humidity: lastPrediction.RH2M !== undefined ? lastPrediction.RH2M : null,
+        luminosity: lastPrediction.luminosity !== undefined ? lastPrediction.luminosity : null,
+        hcho: lastPrediction.hcho !== undefined ? lastPrediction.hcho : null // Check for hcho
+    };
+
+    console.log("Payload to send:", updatedData); // Log the payload
+
+    // Validate that all required fields are present
+    for (const key of ['mold_growth', 'temperature', 'humidity']) {
+        if (updatedData[key] === null) {
+            alert(`Error: ${key} is missing from the prediction data.`);
+            return;
+        }
+    }
+
+    // Undefined cases
+    if (updatedData.luminosity === null) {
+        updatedData.luminosity = 0; 
+    }
+
+    if (updatedData.hcho === null) {
+        updatedData.hcho = 0; 
+    }
+
+    try {
+        const response = await fetch('/update_property', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedData) // Convert the data to JSON string
+        });
+
+        if (response.ok) {
+            alert("Property updated successfully!");
+        } else {
+            const errorData = await response.json(); 
+            alert("Failed to update property: " + errorData.error);
+        }
+    } catch (error) {
+        console.error("Error updating property:", error);
+        alert("An error occurred while updating the property.");
+    }
+}
+    async function updateSelectedProperty() {
+        const selectedId = parseInt(document.getElementById('propertyDropdown').value);
+        const moldGrowthInput = document.getElementById('moldGrowthInput');
+
+        const moldGrowthValue = moldGrowthInput ? moldGrowthInput.value : null;
+
+        if (!selectedId) {
+            alert("Please select a property to update.");
+            return;
+        }
+
+        if (moldGrowthValue === null) {
+            alert("Please enter a mold growth value.");
+            return;
+        }
+
+        try {
+            const humidityTempResponse = await fetch(`/get_last_recorded_prediction/${selectedId}`);
+            const humidityTempData = await humidityTempResponse.json();
+
+            if (humidityTempData) {
+                // Extract the last prediction data
+                const lastPrediction = predictionData[predictionData.length - 1]; // Get the last entry
+
+                const updateData = {
+                    id: selectedId,
+                    mold_growth: moldGrowthValue,
+                    humidity: humidityTempData.humidity,
+                    temperature: humidityTempData.temperature,
+                    luminosity: lastPrediction.luminosity, 
+                    hcho: lastPrediction.hcho               
+                };
+
+                console.log('Update Data:', updateData);
+
+                const updateResponse = await fetch('/update_property', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                console.log('Response Status:', updateResponse.status);
+
+                if (updateResponse.ok) {
+                    alert("Property updated successfully!");
+                } else {
+                    alert("Failed to update the property.");
+                }
+            } else {
+                alert("No prediction data found.");
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert("An error occurred while updating the property.");
+        }
+    }
+
+    async function generateFuturePredictions() {
+        debugLog("Generating future predictions for the next 50 days...");
+        predictionsForNextDays = [];
+
+        if (modelInputData.length < 10) {
+            alert("Not enough data points for prediction. Please record more.");
+            return;
+        }
+
+        let today = new Date(lastRecordedDate);
+
+        // Use the last known inputs for the first prediction
+        let lastInputs = modelInputData.slice(-10).map(data => [data[0], data[1], data[2]]);
+
+        // Calculate average temperature and humidity from historical data
+        const averageTemperature = lastInputs.reduce((sum, data) => sum + data[1], 0) / lastInputs.length;
+        const averageHumidity = lastInputs.reduce((sum, data) => sum + data[0], 0) / lastInputs.length;
+        const rcpType = lastInputs[lastInputs.length - 1][2]; // Use the last known RCP type
+
+        for (let i = 0; i < 50; i++) {
+            
+            if (lastInputs.length === 0) {
+                debugLog("No valid inputs for prediction.");
+                return; // Exit if no inputs
+            }
+
+            const inputTensor = tf.tensor3d([lastInputs], [1, 10, 3]);
+            
+            // Make the prediction
+            const prediction = model.predict(inputTensor);
+            const output = await prediction.array(); // Use async to get the array
+            const predictedMoldGrowth = output[0][0];
+
+            // Store the prediction
+            predictionsForNextDays.push({
+                date: new Date(today.setDate(today.getDate() + 1)).toISOString().split('T')[0],
+                mold_growth: predictedMoldGrowth
+            });
+
+            // Update lastInputs for the next prediction
+            lastInputs.shift(); // Remove the oldest input
+            lastInputs.push([averageHumidity, averageTemperature, rcpType]); // Include RCP type
+
+            //Debugging
+            debugLog(`Day ${i + 1}: Date = ${today.toISOString().split('T')[0]}, Predicted Mold Growth = ${predictedMoldGrowth}`);
+        }
+
+        renderPredictionChart();
+    }
+
+    function renderPredictionChart() {
+        const labels = predictionsForNextDays.map(data => data.date);
+        const moldGrowthValues = predictionsForNextDays.map(data => data.mold_growth);
+
+        const ctx = document.getElementById("prediction-chart").getContext("2d");
+        if (predictionChart) {
+            predictionChart.destroy(); // Destroy the previous chart if it exists
+        }
+
+        predictionChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "Mold Growth Prediction",
+                    data: moldGrowthValues,
+                    borderColor: "rgba(75, 192, 192, 1)",
+                    backgroundColor: "rgba(75, 192, 192, 0.2)",
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Mold Growth'
+                        }
+                    }
+                }
+            }
+        });
+        debugLog("Prediction chart rendered.");
+    }
+
+    window.onload = async () => {
+        debugLog("Page loaded.");
+        await init();
+    };
+</script>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/home">Home</a>
+        <a href="/data">Data</a>
+        <a href="/schema">Database Structure</a>
+        <a href="/prediction">Prediction</a>
+        <a href="#" data-bs-toggle="modal" data-bs-target="#searchModal">Search</a>
+    </nav>
+
+    <div class="content">
+        <h1>Start/Stop Recording Prediction Data</h1>
+        <p>Click the button below to toggle recording sensor data into the Prediction_Data table.</p>
+        <button id="toggle-recording" class="btn btn-custom" onclick="toggleRecording()">Start Recording</button>
+        <p>{% if recording %}Recording is active.{% else %}Recording is not active.{% endif %}</p>
+
+        <h2>Recorded Prediction Data</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Temperature (TS)</th>
+                    <th>Humidity (RH2M)</th>
+                    <th>Mold Growth Prediction</th>
+                    <th>Luminosity (Lux)</th>
+                    <th>HCHO (µg/m³)</th>
+                </tr>
+            </thead>
+            <tbody id="data-body">
+                <!-- Data will be dynamically inserted here -->
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between mt-3">
+            <button onclick="makePrediction()" class="btn btn-custom">Make Prediction</button>
+            <button onclick="generateFuturePredictions()" class="btn btn-custom">Generate 50 Day Predictions</button>
+        </div>
+
+        <div class="form-group mt-4">
+            <label for="rcpType">Select RCP Type:</label>
+            <select id="rcpType" class="form-select">
+                <option value="0">results_RCP2_6.csv</option>
+                <option value="1">results_RCP4_5.csv</option>
+                <option value="2">results_RCP8_5.csv</option>
+            </select>
+        </div>
+
+        <div class="form-group mt-4">
+            <label for="propertyDropdown">Select Property:</label>
+            <select id="propertyDropdown" class="form-select">
+                <option value="">Select a property...</option>
+                <!-- Options will be populated dynamically -->
+            </select>
+        </div>
+
+        <button onclick="updateLastPropertyData()" class="btn btn-warning mt-2">Update Selected Property</button> 
+
+        <div id="propertyDetails" style="display: none;">
+            <h2>Property Details</h2>
+            <p id="detailsText"></p>
+            <img id="propertyImage" src="" alt="Property Image" class="property-image" style="max-width: 100px; max-height: 100px;">
+        </div>
+        
+        <canvas id="prediction-chart" width="600" height="400"></canvas>
+
+        <div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <form action="{{ url_for('search_properties') }}" method="get" id="search-filter-form" autocomplete="off">
+                            <ul class="list-unstyled">
+                                <li>
+                                    <label>Property Type:</label>
+                                    <select name="property_type_id" class="form-select">
+                                        <option value="">All</option>
+                                        {% for type in property_types %}
+                                        <option value="{{ type[0] }}">{{ type[1] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </li>
+                                <li>
+                                    <label>Location:</label>
+                                    <select name="location_id" class="form-select">
+                                        <option value="">All</option>
+                                        {% for location in locations %}
+                                        <option value="{{ location[0] }}">{{ location[1] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </li>
+                                <li>
+                                    <label>Price Range:</label>
+                                    <input type="number" name="min_price" placeholder="Min Price" class="form-control">
+                                    <input type="number" name="max_price" placeholder="Max Price" class="form-control">
+                                </li>
+                                <li>
+                                    <label>Luminosity:</label>
+                                    <input type="number" name="luminosity" placeholder="Luminosity" class="form-control">
+                                </li>
+                                <li>
+                                    <label>Humidity:</label>
+                                    <input type="number" name="humidity" placeholder="Humidity" class="form-control">
+                                </li>
+                                <li>
+                                    <label>Temperature:</label>
+                                    <input type="number" name="temperature" placeholder="Temperature" class="form-control">
+                                </li>
+                                <li>
+                                    <input type="submit" value="Search" class="btn btn-primary">
+                                </li>
+                            </ul>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Schema - Real Estate Project IoT</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Georgia', serif; 
+            background-color: #f8f9fa; /* Light grey background */
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.7); /* Transparent dark background */
+        }
+        .navbar a {
+            color: white;
+            padding: 14px 16px; 
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .content {
+            padding: 40px;
+            text-align: center;
+        }
+        table {
+            margin: 20px auto;
+            width: 80%; /* Center table with width */
+        }
+        th {
+            background-color: #f1f1f1; /* Light grey for header */
+            color: #333; /* Dark text for header */
+        }
+        tbody tr:hover {
+            background-color: #e0e0e0; /* Light grey on row hover */
+        }
+        .modal-content {
+            padding: 0.5rem;
+            font-size: 1rem;
+        }
+        .modal-body {
+            background-color: #f1f1f1; /* Light grey for modal body */
+        }
+        .modal-header {
+            background-color: rgba(0, 0, 0, 0.7); /* Dark header */
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar">
+    <a href="/home">Home</a>
+    <a href="/data">Data</a>
+    <a href="/schema">Database Structure</a>
+    <a href="/prediction">Prediction</a>
+    <a href="#" data-bs-toggle="modal" data-bs-target="#searchModal">Search</a>
+</nav>
+
+<!-- Main Content Area -->
+<div class="content">
+    <h1>Database Schema</h1>
+    {% for table, columns in schema.items() %}
+        <h2>Table: {{ table }}</h2>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Column Name</th>
+                    <th>Data Type</th>
+                    <th>Not Null</th>
+                    <th>Default Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for column in columns %}
+                <tr>
+                    <td>{{ column[1] }}</td>
+                    <td>{{ column[2] }}</td>
+                    <td>{{ 'Yes' if column[3] else 'No' }}</td>
+                    <td>{{ column[4] if column[4] is not none else 'None' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endfor %}
+    <a href="/reset" class="btn btn-danger">Reset Database</a>
+</div>
+
+<!-- Search Modal -->
+<div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Search Properties</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('search_properties') }}" method="get" id="search-filter-form" autocomplete="off">
+                    <ul class="list-unstyled">
+                        <li>
+                            <label>Property Type:</label>
+                            <select name="property_type_id" class="form-select">
+                                <option value="">All</option>
+                                {% for type in property_types %}
+                                <option value="{{ type[0] }}">{{ type[1] }}</option>
+                                {% endfor %}
+                            </select>
+                        </li>
+                        <li>
+                            <label>Location:</label>
+                            <select name="location_id" class="form-select">
+                                <option value="">All</option>
+                                {% for location in locations %}
+                                <option value="{{ location[0] }}">{{ location[1] }}</option>
+                                {% endfor %}
+                            </select>
+                        </li>
+                        <li>
+                            <label>Price Range:</label>
+                            <input type="number" name="min_price" placeholder="Min Price" class="form-control">
+                            <input type="number" name="max_price" placeholder="Max Price" class="form-control">
+                        </li>
+                        <li>
+                            <label>Luminosity:</label>
+                            <input type="number" name="luminosity" placeholder="Luminosity" class="form-control">
+                        </li>
+                        <li>
+                            <label>Humidity:</label>
+                            <input type="number" name="humidity" placeholder="Humidity" class="form-control">
+                        </li>
+                        <li>
+                            <label>Temperature:</label>
+                            <input type="number" name="temperature" placeholder="Temperature" class="form-control">
+                        </li>
+                        <li>
+                            <input type="submit" value="Search" class="btn btn-primary">
+                        </li>
+                    </ul>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

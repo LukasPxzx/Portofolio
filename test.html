@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature and Humidity Predictor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            max-width: 400px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        input {
+            margin: 10px 0;
+            padding: 10px;
+            width: 100%;
+        }
+        button {
+            padding: 10px;
+            width: 100%;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h2>Temperature and Humidity Predictor</h2>
+    <label for="temperature">Temperature (°C):</label>
+    <input type="number" id="temperature" placeholder="Enter temperature..." required>
+    
+    <label for="humidity">Humidity (%):</label>
+    <input type="number" id="humidity" placeholder="Enter humidity..." required>
+    
+    <button id="predict">Predict</button>
+    
+    <h3 id="result"></h3>
+
+    <script>
+        let model;
+
+        // Load the model
+        
+        async function loadModel() {
+            model = await tf.loadLayersModel('/static/testmodel/model.json');
+            console.log("Model loaded successfully");
+        }
+
+        // Make a prediction
+        async function makePrediction() {
+            const temp = parseFloat(document.getElementById('temperature').value);
+            const hum = parseFloat(document.getElementById('humidity').value);
+
+            const inputTensor = tf.tensor2d([[temp, hum]]);  // Shape should be [1, 2]
+            const prediction = model.predict(inputTensor);
+            const output = prediction.dataSync()[0]; 
+
+            document.getElementById('result').innerText = `Predicted Output: ${output.toFixed(4)}`;
+        }
+
+        // Event listener for the predict button
+        document.getElementById('predict').addEventListener('click', makePrediction);
+
+        // Load the model when the page loads
+        window.onload = loadModel;
+    </script>
+</body>
+</html>

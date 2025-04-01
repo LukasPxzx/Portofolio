@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data - Real Estate Project IoT</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            background-color: #f8f9fa; 
+            color: #333; 
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.7); /* 0.7 == Semi Transparent*/
+        }
+        .navbar a {
+            color: white;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .content {
+            padding: 40px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.8); 
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 90%;
+        }
+        .option {
+            margin: 10px;
+            padding: 15px;
+            background-color: #d9c49e; 
+            color: #333;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .option:hover {
+            background-color: #c9b89a; 
+            transform: scale(1.05);
+        }
+        .property-image {
+            max-width: 100px;
+            max-height: 75px;
+            width: auto;
+            height: auto;
+        }
+        .table th, .table td {
+            vertical-align: middle;
+            text-align: center;
+        }
+        .table th {
+            background-color: #f1f1f1; 
+            color: #333; 
+        }
+        .table tbody tr:hover {
+            background-color: #e0e0e0; 
+        }
+        .modal-content {
+            padding: 0.5rem;
+            font-size: 1rem;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-dialog {
+            max-width: 90%;
+            width: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100% - 1rem);
+        }
+        .graph-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .graph {
+            width: 45%; 
+            margin: 10px; /* Between graphs */
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar">
+    <a href="/home">Home</a>
+    <a href="/data">Data</a>
+    <a href="/schema">Database Structure</a>
+    <a href="/prediction">Prediction</a>
+    <a href="#" data-bs-toggle="modal" data-bs-target="#searchModal">Search</a>
+</nav>
+
+<!-- Main Content Area -->
+<div class="content">
+    <h1>Data Overview</h1>
+
+    <h2>Select Data to View</h2>
+    <div class="d-flex justify-content-center flex-wrap">
+        <div class="option" onclick="openModal('properties')">Properties</div>
+        <div class="option" onclick="openModal('predictionData')">Prediction Data</div>
+        <div class="option" onclick="openModal('propertyTypes')">Property Types</div>
+        <div class="option" onclick="openModal('locations')">Locations</div>
+        <div class="option" onclick="openModal('users')">Users</div>
+    </div>
+
+    <!-- Graphs Section -->
+    <div class="graph-container" id="graphs">
+        <div class="graph">
+            <canvas id="luminosityChart"></canvas>
+        </div>
+        <div class="graph">
+            <canvas id="humidityChart"></canvas>
+        </div>
+        <div class="graph">
+            <canvas id="temperatureChart"></canvas>
+        </div>
+        <div class="graph">
+            <canvas id="hchoChart"></canvas>
+        </div>
+    </div>
+
+    <!-- The Modal -->
+    <div class="modal fade" id="myModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h4 class="modal-title">Data Table</h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="modal-body">
+                    <table class="table table-responsive" id="dataTable">
+                        <thead>
+                            <tr id="tableHeader"></tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Close</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Socket.IO Client -->
+<script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+
+<script>
+    // Common chart options
+    const commonChartOptions = {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)', // Light grid lines 
+                },
+                ticks: {
+                    color: '#333', // Darker ticks
+                }
+            },
+            x: {
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)', // Light grid lines
+                },
+                ticks: {
+                    color: '#333', // Darker ticks
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                labels: {
+                    color: '#333', // Dark color for legend labels
+                }
+            }
+        }
+    };
+
+    // Initialize the charts with common options
+    const luminosityChart = new Chart(document.getElementById('luminosityChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Luminosity',
+                borderColor: 'rgba(75, 192, 192, 1)', // Teal for border
+                backgroundColor: 'rgba(75, 192, 192, 0.2)', // Light teal for fill
+                data: [],
+                fill: true
+            }]
+        },
+        options: commonChartOptions
+    });
+
+    const humidityChart = new Chart(document.getElementById('humidityChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Humidity',
+                borderColor: 'rgba(153, 102, 255, 1)', // Purple for border
+                backgroundColor: 'rgba(153, 102, 255, 0.2)', // Light purple for fill
+                data: [],
+                fill: true
+            }]
+        },
+        options: commonChartOptions
+    });
+
+    const temperatureChart = new Chart(document.getElementById('temperatureChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Temperature',
+                borderColor: 'rgba(255, 159, 64, 1)', // Orange for border
+                backgroundColor: 'rgba(255, 159, 64, 0.2)', // Light orange for fill
+                data: [],
+                fill: true
+            }]
+        },
+        options: commonChartOptions
+    });
+
+    const hchoChart = new Chart(document.getElementById('hchoChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'HCHO',
+                borderColor: 'rgba(255, 99, 132, 1)', // Red for border
+                backgroundColor: 'rgba(255, 99, 132, 0.2)', // Light red for fill
+                data: [],
+                fill: true
+            }]
+        },
+        options: commonChartOptions
+    });
+
+    // Socket.IO and chart data
+    const serverUrl = window.location.origin;
+    const socket = io.connect(serverUrl);
+
+    // Listen for updates from the server
+    socket.on('new_data', function(data) {
+        const latestData = data.prediction_data[0];
+        updateChart(luminosityChart, [latestData[3]], 'Luminosity');
+        updateChart(humidityChart, [latestData[2]], 'Humidity');
+        updateChart(temperatureChart, [latestData[1]], 'Temperature');
+        updateChart(hchoChart, [latestData[4]], 'HCHO');
+    });
+
+    // Function to update a chart with new data
+    function updateChart(chart, newData) {
+        const currentLabels = chart.data.labels;
+        const currentData = chart.data.datasets[0].data;
+
+        if (currentLabels.length >= 20) {
+            currentLabels.shift();
+            currentData.shift();
+        }
+
+        currentLabels.push(currentLabels.length + 1);
+        currentData.push(newData[0]);
+
+        chart.update();
+    }
+
+    // Retrieve initial data to plot initial graphs
+    fetch('/get_prediction_data')
+        .then(response => response.json())
+        .then(data => {
+            const luminosityData = data.map(item => item.luminosity);
+            const humidityData = data.map(item => item.humidity);
+            const temperatureData = data.map(item => item.temperature);
+            const hchoData = data.map(item => item.hcho);
+
+            updateChart(luminosityChart, luminosityData);
+            updateChart(humidityChart, humidityData);
+            updateChart(temperatureChart, temperatureData);
+            updateChart(hchoChart, hchoData);
+        })
+        .catch(error => console.error('Error fetching initial prediction data:', error));
+
+    // Function to open modal and retrieve data
+    function openModal(option) {
+        var modalElement = document.getElementById('myModal');
+        var modal = new bootstrap.Modal(modalElement);
+        var tableBody = document.getElementById('tableBody');
+        var tableHeader = document.getElementById('tableHeader');
+
+        // Clear previous content
+        tableBody.innerHTML = '';
+        tableHeader.innerHTML = '';
+
+        // Retrieve and populate data based on the selected option
+        if (option === 'properties') {
+            tableHeader.innerHTML = `
+                <th>ID</th>
+                <th>Type ID</th>
+                <th>Price</th>
+                <th>Location ID</th>
+                <th>Mold Growth</th>
+                <th>Luminosity</th>
+                <th>Humidity</th>
+                <th>Temperature</th>
+                <th>HCHO</th>
+                <th>Image</th>
+            `;
+            fetch('/get_properties')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(property => {
+                        var row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${property.id}</td>
+                            <td>${property.property_type_id}</td>
+                            <td>${property.price}</td>
+                            <td>${property.location_id}</td>
+                            <td>${property.mold_growth !== null ? property.mold_growth : 'N/A'}</td>
+                            <td>${property.luminosity}</td>
+                            <td>${property.humidity}</td>
+                            <td>${property.temperature}</td>
+                            <td>${property.hcho !== undefined ? property.hcho : 'N/A'}</td>
+                            <td>
+                                <img src="${property.image || 'https://via.placeholder.com/100'}" 
+                                     alt="Property Image" class="property-image">
+                            </td>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching properties:', error);
+                    tableBody.innerHTML = `<tr><td colspan="10">Error loading data: ${error.message}</td></tr>`;
+                });
+        } else if (option === 'predictionData') {
+            tableHeader.innerHTML = `
+                <th>ID</th>
+                <th>Temperature</th>
+                <th>Humidity</th>
+                <th>Luminosity</th>
+                <th>HCHO</th>
+            `;
+            
+            fetch('/get_prediction_data')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(prediction => {
+                        var row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${prediction.id}</td>
+                            <td>${prediction.temperature}</td>
+                            <td>${prediction.humidity}</td>
+                            <td>${prediction.luminosity}</td>
+                            <td>${prediction.hcho !== undefined ? prediction.hcho : 'N/A'}</td>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching prediction data:', error);
+                    tableBody.innerHTML = `<tr><td colspan="5">Error loading data: ${error.message}</td></tr>`;
+                });
+        } else if (option === 'propertyTypes') {
+            tableHeader.innerHTML = `<th>ID</th><th>Type Name</th>`;
+            fetch('/get_property_types')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(type => {
+                        var row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${type.id}</td>
+                            <td>${type.type_name}</td>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching property types:', error);
+                    tableBody.innerHTML = `<tr><td colspan="2">Error loading data: ${error.message}</td></tr>`;
+                });
+        } else if (option === 'locations') {
+            tableHeader.innerHTML = `<th>ID</th><th>Location Name</th>`;
+            fetch('/get_locations')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(location => {
+                        var row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${location.id}</td>
+                            <td>${location.location_name}</td>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching locations:', error);
+                    tableBody.innerHTML = `<tr><td colspan="2">Error loading data: ${error.message}</td></tr>`;
+                });
+        } else if (option === 'users') {
+            tableHeader.innerHTML = `<th>ID</th><th>Username</th>`;
+            fetch('/get_users')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(user => {
+                        var row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${user.id}</td>
+                            <td>${user.username}</td>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching users:', error);
+                    tableBody.innerHTML = `<tr><td colspan="2">Error loading data: ${error.message}</td></tr>`;
+                });
+        }
+
+        // Show the modal
+        var modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+</script>
+</body>
+</html>
