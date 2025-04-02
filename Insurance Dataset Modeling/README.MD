@@ -89,10 +89,6 @@ python IsolationForest.py
 - **Data Visualization**: The scripts generate visualizations to aid in understanding model performance and assumptions.
 - **Model Interpretation**: Review coefficients from regression and anomalies from the Autoencoder and Isolation Forest.
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any bugs or enhancements.
-
 ## Acknowledgments
 
 - Scikit-learn for machine learning tools.
