@@ -2,12 +2,16 @@
 
 ## Overview
 
-This project aims to predict stock prices using various machine learning (ML) and deep learning (DL) algorithms. It implements models such as Linear Regression, Random Forest, and Long Short-Term Memory (LSTM) networks to analyze historical stock data and make predictions.
+This project aims to predict stock prices using various machine learning (ML) and deep learning (DL) algorithms. It implements models such as Linear Regression, Random Forest, Polynomial Regression, Support Vector Regression (SVR), K-Nearest Neighbors (KNN), Gradient Boosting, and Long Short-Term Memory (LSTM) networks to analyze historical stock data and make predictions.
 
 ## Features
 
-- **Linear Regression**: A simple approach to predict stock prices based on historical data.
+- **Linear Regression**: A basic approach to predict stock prices based on historical data.
 - **Random Forest Regressor**: An ensemble method that improves prediction accuracy by averaging multiple decision trees.
+- **Polynomial Regression**: Extends linear regression by considering polynomial relationships.
+- **Support Vector Regression (SVR)**: Uses support vector machines for regression tasks.
+- **K-Nearest Neighbors (KNN)**: A non-parametric method that predicts stock prices based on the average of the nearest neighbors.
+- **Gradient Boosting Regressor**: An ensemble technique that builds models sequentially to improve performance.
 - **LSTM**: A deep learning model specifically designed for sequence prediction, beneficial for time series data.
 
 ## Installation
@@ -15,14 +19,14 @@ This project aims to predict stock prices using various machine learning (ML) an
 ### Prerequisites
 
 - Python 3.7 or higher
-- Libraries: Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn, Keras
+- Libraries: Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn, Keras, Statsmodels
 
 ### Required Libraries
 
 Install the necessary Python packages:
 
 ```bash
-pip install pandas numpy matplotlib seaborn scikit-learn keras
+pip install pandas numpy matplotlib seaborn scikit-learn keras statsmodels
 ```
 
 ## Data Overview
@@ -75,9 +79,7 @@ X_train, X_test, y_train, y_test = train_test_split(X_scaled, data['Target'], te
 
 ### Model Training
 
-- **Linear Regression**: Train and evaluate the model.
-- **Random Forest Regressor**: Train and evaluate the model.
-- **LSTM**: Reshape the data, build, and train the model.
+Train various models including Linear Regression, Random Forest, Polynomial Regression, SVR, KNN, Gradient Boosting, and LSTM.
 
 ```python
 # Train Linear Regression
@@ -88,6 +90,25 @@ lin_reg.fit(X_train, y_train)
 rf_reg = RandomForestRegressor(n_estimators=100, random_state=42)
 rf_reg.fit(X_train, y_train)
 
+# Train Polynomial Regression
+poly_features = PolynomialFeatures(degree=2)
+X_poly_train = poly_features.fit_transform(X_train)
+X_poly_test = poly_features.transform(X_test)
+poly_reg = LinearRegression()
+poly_reg.fit(X_poly_train, y_train)
+
+# Train SVR
+svr_reg = SVR(kernel='rbf')
+svr_reg.fit(X_train, y_train)
+
+# Train KNN
+knn_reg = KNeighborsRegressor(n_neighbors=5)
+knn_reg.fit(X_train, y_train)
+
+# Train Gradient Boosting Regressor
+gbm_reg = GradientBoostingRegressor(n_estimators=100, random_state=42)
+gbm_reg.fit(X_train, y_train)
+
 # Reshape data for LSTM
 X_train_lstm = np.array(X_train).reshape((X_train.shape[0], 1, X_train.shape[1]))
 ```
@@ -97,26 +118,42 @@ X_train_lstm = np.array(X_train).reshape((X_train.shape[0], 1, X_train.shape[1])
 Make predictions and evaluate all models using Mean Squared Error (MSE) and Mean Absolute Error (MAE).
 
 ```python
+# Predictions for all models
 y_pred_lin = lin_reg.predict(X_test)
 y_pred_rf = rf_reg.predict(X_test)
+y_pred_poly = poly_reg.predict(X_poly_test)
+y_pred_svr = svr_reg.predict(X_test)
+y_pred_knn = knn_reg.predict(X_test)
+y_pred_gbm = gbm_reg.predict(X_test)
 y_pred_lstm = lstm_model.predict(X_test_lstm)
 ```
 
 ### Visualizations
 
-Generate various visualizations to analyze the model performance, including residuals and loss functions.
+Generate various visualizations to analyze the model performance, including residuals and predictions versus actual values.
 
 ```python
-# Residuals for Linear Regression
-plt.figure(figsize=(14, 5))
-plt.scatter(y_test, y_pred_lin - y_test, color='blue', label='Residuals', alpha=0.7)
-plt.axhline(0, color='red', linestyle='--', label='Zero Residual Line')
-plt.title('Linear Regression Residuals')
-plt.xlabel('Actual Values')
-plt.ylabel('Residuals')
-plt.legend()
-plt.grid()
-plt.show()
+# Function to plot residuals
+def plot_residuals(y_true, y_pred, model_name):
+    residuals = y_true - y_pred
+    plt.figure(figsize=(14, 5))
+    plt.scatter(y_true, residuals, alpha=0.7)
+    plt.axhline(0, color='red', linestyle='--', label='Zero Residual Line')
+    plt.title(f'{model_name} Residuals')
+    plt.xlabel('Actual Values')
+    plt.ylabel('Residuals')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+# Plot residuals for each model
+plot_residuals(y_test, y_pred_lin, 'Linear Regression')
+plot_residuals(y_test, y_pred_rf, 'Random Forest')
+plot_residuals(y_test, y_pred_poly, 'Polynomial Regression')
+plot_residuals(y_test, y_pred_svr, 'SVR')
+plot_residuals(y_test, y_pred_knn, 'KNN')
+plot_residuals(y_test, y_pred_gbm, 'GBM')
+plot_residuals(y_test, y_pred_lstm, 'LSTM')
 ```
 
 ## Running the Analysis
@@ -140,4 +177,5 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 
 - Scikit-learn for machine learning tools.
 - Keras for deep learning methodologies.
+- Statsmodels for time series analysis.
 - Matplotlib and Seaborn for data visualization.
