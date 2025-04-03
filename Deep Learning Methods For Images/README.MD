@@ -77,8 +77,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Scikit-learn](https://scikit-learn.org/) for machine learning algorithms.
 - [TensorFlow](https://www.tensorflow.org/) and [PyTorch](https://pytorch.org/) for deep learning frameworks.
-- [OpenCV](https://opencv.org/) for image processing functionalities.
+- [OpenCV](https://opencv.org/) for advanced image processing functionalities, including image manipulation, object detection, and more.
+- [PIL (Pillow)](https://python-pillow.org/) for basic image opening, manipulation, and saving.
 
-## Contact
-
-For any inquiries or contributions, please contact [your_email@example.com].
